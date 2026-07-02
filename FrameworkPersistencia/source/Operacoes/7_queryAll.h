@@ -1,25 +1,29 @@
 #ifndef QUERYALL_H
 #define QUERYALL_H
 
-pDLista queryAll(pDFile arq){
+#include <stdio.h>
+#include <stdlib.h>
 
-   if (arq->arquivo == NULL){
-       printf("Arquivo não foi aberto!");
-       return NULL;
-   }
-
-   pDLista registros = criarLista();
-
-    void* registro = malloc(arq->tamanhoRegistro);
-    rewind(arq->arquivo);
-
-    while(fread(registro, arq->tamanhoRegistro, 1 , arq->arquivo) != 0){
-        incluirInfo(registros, registro);
-        registro = malloc(arq->tamanhoRegistro);
+int dGetTotalRecords(dFile* df) {
+    if (df == NULL || df->arquivo == NULL) {
+        return -1;
     }
 
-    return registros;
+    long posicaoAtual = ftell(df->arquivo);
+    fseek(df->arquivo, 0, SEEK_END);
+    long tamanhoArquivo = ftell(df->arquivo);
+    fseek(df->arquivo, posicaoAtual, SEEK_SET);
 
+    if (df->tamanhoRegistro <= 0) {
+        return -1;
+    }
+
+    return (int)(tamanhoArquivo / df->tamanhoRegistro);
+}
+
+int dGetNextId(dFile* df) {
+    int total = dGetTotalRecords(df);
+    return (total < 0) ? 1 : total + 1;
 }
 
 #endif

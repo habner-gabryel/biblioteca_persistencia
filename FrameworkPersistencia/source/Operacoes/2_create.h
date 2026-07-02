@@ -1,16 +1,23 @@
 #ifndef CREATE_H
 #define CREATE_H
 
-void createe (pDFile arq, void* dados){
+#include <stdio.h>
 
-    if (arq->arquivo == NULL){
-        printf("Arquivo não foi aberto!");
-        return;
-    }
-
-    fseek(arq->arquivo, 0, SEEK_END);
-    fwrite(dados, arq->tamanhoRegistro, 1 , arq->arquivo);
+void createe(pDFile arq, void* dados) {
+    (void)dCreate(arq, dados);
 }
 
+int dCreate(dFile* df, void* dado) {
+    if (df == NULL || df->arquivo == NULL || dado == NULL) {
+        return -1;
+    }
+
+    if (fseek(df->arquivo, 0, SEEK_END) != 0) {
+        return -1;
+    }
+
+    size_t escrito = fwrite(dado, df->tamanhoRegistro, 1, df->arquivo);
+    return (escrito == 1) ? 0 : -1;
+}
 
 #endif
