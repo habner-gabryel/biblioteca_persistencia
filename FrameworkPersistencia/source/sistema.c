@@ -1,5 +1,6 @@
 #include "sistema.h"
 #include "Persistencia.h"
+#include "entidades.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,55 @@ static int lerRegistro(const char* arquivo, int tamanhoRegistro, int id, void* r
     int result = dRetrieve(df, id, registro);
     dClose(df);
     return result;
+}
+
+static int atualizarQuantidadeLivro(int id, int delta) {
+    Livro livro;
+    if (obterLivroPorId(id, &livro) != 0) {
+        return -1;
+    }
+
+    livro.quantidade_disponivel += delta;
+    if (livro.quantidade_disponivel < 0) {
+        return -1;
+    }
+
+    return atualizarLivro(&livro);
+}
+
+static int lerUsuarioAtivo(int id, Usuario* usuario) {
+    if (usuario == NULL) {
+        return -1;
+    }
+    return obterUsuarioPorId(id, usuario);
+}
+
+static int lerLivroAtivo(int id, Livro* livro) {
+    if (livro == NULL) {
+        return -1;
+    }
+    return obterLivroPorId(id, livro);
+}
+
+static int validarDatasEmprestimo(const char* dataEmprestimo, const char* dataDevolucaoPrevista) {
+    if (!dataValida(dataEmprestimo) || !dataValida(dataDevolucaoPrevista)) {
+        return 0;
+    }
+
+    return dataMaiorOuIgual(dataDevolucaoPrevista, dataEmprestimo);
+}
+
+static int calcularStatusDevolucao(const char* dataPrevista, const char* dataReal) {
+    int previsto = dataParaNumero(dataPrevista);
+    int real = dataParaNumero(dataReal);
+    if (previsto < 0 || real < 0) {
+        return -1;
+    }
+
+    if (real > previsto) {
+        return 2; // atrasado
+    }
+    return 1; // devolvido em dia ou no prazo
 }
 
 /* Usuários */
@@ -314,6 +364,96 @@ int criarEmprestimo(Emprestimo* emprestimo) {
     int result = dCreate(df, emprestimo);
     dClose(df);
     return result;
+}
+
+int registrarNovoEmprestimo(int id_usuario, int id_livro, const char* dataEmprestimo, const char* dataDevolucaoPrevista, int* idEmprestimo) {
+    if (id_usuario < 1 || id_livro < 1 || dataEmprestimo == NULL || dataDevolucaoPrevista == NULL || idEmprestimo == NULL) {
+        return -1;
+    }
+
+    if (!validarDatasEmprestimo(dataEmprestimo, dataDevolucaoPrevista)) {
+        return -1;
+    }
+
+    Usuario usuario;
+    if (lerUsuarioAtivo(id_usuario, &usuario) != 0) {
+        return -1;
+    }
+
+    Livro livro;
+    if (lerLivroAtivo(id_livro, &livro) != 0) {
+        return -1;
+    }
+
+    if (livro.quantidade_disponivel <= 0) {
+        return -1;
+    }
+
+    Livro livroAtualizado = livro;
+    livroAtualizado.quantidade_disponivel -= 1;
+    if (atualizarLivro(&livroAtualizado) != 0) {
+        return -1;
+    }
+
+    Emprestimo emprestimo = {0};
+    emprestimo.id_usuario = usuario.id;
+    emprestimo.id_livro = livro.id;
+    strncpy(emprestimo.data_emprestimo, dataEmprestimo, DATA_TAM - 1);
+    emprestimo.data_emprestimo[DATA_TAM - 1] = '\0';
+    strncpy(emprestimo.data_devolucao_prevista, dataDevolucaoPrevista, DATA_TAM - 1);
+    emprestimo.data_devolucao_prevista[DATA_TAM - 1] = '\0';
+    emprestimo.data_devolucao_real[0] = '\0';
+    emprestimo.status = 0;
+    emprestimo.ativo = 1;
+
+    int result = criarEmprestimo(&emprestimo);
+    if (result != 0) {
+        Livro livroRestaurado = livro;
+        livroRestaurado.quantidade_disponivel += 1;
+        atualizarLivro(&livroRestaurado);
+        return -1;
+    }
+
+    *idEmprestimo = emprestimo.id;
+    return 0;
+}
+
+int registrarDevolucao(int idEmprestimo, const char* dataDevolucaoReal) {
+    if (idEmprestimo < 1 || dataDevolucaoReal == NULL) {
+        return -1;
+    }
+
+    if (!dataValida(dataDevolucaoReal)) {
+        return -1;
+    }
+
+    Emprestimo emprestimo;
+    if (obterEmprestimoPorId(idEmprestimo, &emprestimo) != 0) {
+        return -1;
+    }
+
+    if (emprestimo.status != 0) {
+        return -1;
+    }
+
+    int novoStatus = calcularStatusDevolucao(emprestimo.data_devolucao_prevista, dataDevolucaoReal);
+    if (novoStatus < 0) {
+        return -1;
+    }
+
+    strncpy(emprestimo.data_devolucao_real, dataDevolucaoReal, DATA_TAM - 1);
+    emprestimo.data_devolucao_real[DATA_TAM - 1] = '\0';
+    emprestimo.status = novoStatus;
+
+    if (atualizarEmprestimo(&emprestimo) != 0) {
+        return -1;
+    }
+
+    if (atualizarQuantidadeLivro(emprestimo.id_livro, 1) != 0) {
+        return -1;
+    }
+
+    return 0;
 }
 
 int obterEmprestimoPorId(int id, Emprestimo* emprestimo) {

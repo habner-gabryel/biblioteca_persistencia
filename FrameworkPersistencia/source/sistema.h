@@ -30,6 +30,10 @@ int excluirEmprestimo(int id);
 int listarEmprestimosAtivos(Emprestimo** emprestimos, int* quantidade);
 int listarEmprestimosAtrasados(Emprestimo** emprestimos, int* quantidade);
 
+/* Regras de negócio */
+int registrarNovoEmprestimo(int id_usuario, int id_livro, const char* dataEmprestimo, const char* dataDevolucaoPrevista, int* idEmprestimo);
+int registrarDevolucao(int idEmprestimo, const char* dataDevolucaoReal);
+
 void liberarLista(void* lista);
 
 #endif // SISTEMA_H
